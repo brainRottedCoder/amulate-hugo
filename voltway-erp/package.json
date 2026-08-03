@@ -6,7 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:evals": "tsx tests/evals/run.ts",
+    "reindex": "tsx --env-file=.env.local scripts/reindex-materials.ts",
+    "seed:large": "tsx --env-file=.env.local scripts/seed-large-catalog.ts",
+    "scale:smoke": "tsx scripts/scale-smoke-rag.ts",
+    "provision:tenant": "tsx --env-file=.env.local scripts/provision-tenant.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -22,9 +31,11 @@
     "ocr-space-api-wrapper": "^2.4.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "resend": "^6.6.0"
+    "resend": "^6.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^7.0.4",
@@ -34,6 +45,7 @@
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

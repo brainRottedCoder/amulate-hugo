@@ -79,6 +79,16 @@ export function getTransporter(): Transporter<SMTPTransport.SentMessageInfo> | n
  * Send email using Nodemailer
  */
 export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    try {
+        const { assertEmailAllowed } = await import('@/lib/emailAllowlist');
+        assertEmailAllowed(options.to);
+    } catch (e) {
+        return {
+            success: false,
+            error: e instanceof Error ? e.message : 'Email blocked by staging allowlist',
+        };
+    }
+
     const config = getSMTPConfig();
     if (!config) {
         return {

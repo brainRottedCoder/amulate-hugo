@@ -1,11 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Header from '@/components/layout/Header';
 import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { authFetch } from '@/lib/auth/authFetch';
 
 const COLLECTIONS = ['materials', 'stock_levels', 'dispatch_parameters', 'material_orders', 'sales_orders', 'suppliers'];
+
+type MemoryRow = {
+    id: string;
+    type: string;
+    text: string;
+    importance: number;
+    createdAt: string;
+};
 
 export default function SettingsPage() {
     const [backupStatus, setBackupStatus] = useState('');
@@ -13,6 +22,24 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(false);
     const [lastBackupTime, setLastBackupTime] = useState<string | null>(null);
     const [hasBackup, setHasBackup] = useState(false);
+    const [memories, setMemories] = useState<MemoryRow[]>([]);
+    const [memoriesLoading, setMemoriesLoading] = useState(false);
+    const [memoriesError, setMemoriesError] = useState<string | null>(null);
+
+    const refreshMemories = useCallback(async () => {
+        setMemoriesLoading(true);
+        setMemoriesError(null);
+        try {
+            const res = await authFetch('/api/hugo/memories');
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to load memories');
+            setMemories(data.memories || []);
+        } catch (e) {
+            setMemoriesError(e instanceof Error ? e.message : 'Failed to load memories');
+        } finally {
+            setMemoriesLoading(false);
+        }
+    }, []);
 
     // Check if backup exists on load
     useEffect(() => {
@@ -22,7 +49,24 @@ export default function SettingsPage() {
             setLastBackupTime(backup.timestamp);
             setHasBackup(true);
         }
-    }, []);
+        void refreshMemories();
+    }, [refreshMemories]);
+
+    const deleteMemory = async (memoryId: string) => {
+        setMemoriesLoading(true);
+        try {
+            const res = await authFetch('/api/hugo/memories', {
+                method: 'DELETE',
+                body: JSON.stringify({ memoryId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Delete failed');
+            await refreshMemories();
+        } catch (e) {
+            setMemoriesError(e instanceof Error ? e.message : 'Delete failed');
+            setMemoriesLoading(false);
+        }
+    };
 
     // BACKUP: Save current Firebase data to localStorage
     const backupDatabase = async () => {
@@ -30,7 +74,7 @@ export default function SettingsPage() {
         setBackupStatus('Backing up database...');
 
         try {
-            const backup: { [key: string]: any[] } = {};
+            const backup: { [key: string]: Record<string, unknown>[] } = {};
 
             for (const collectionName of COLLECTIONS) {
                 const snapshot = await getDocs(collection(db, collectionName));
@@ -50,8 +94,8 @@ export default function SettingsPage() {
             setLastBackupTime(backupData.timestamp);
             setHasBackup(true);
             setBackupStatus(`✅ Backup complete! Saved ${Object.values(backup).flat().length} records`);
-        } catch (error: any) {
-            setBackupStatus(`❌ Error: ${error.message}`);
+        } catch (error: unknown) {
+            setBackupStatus(`❌ Error: ${error instanceof Error ? error.message : 'Backup failed'}`);
         } finally {
             setLoading(false);
         }
@@ -90,8 +134,8 @@ export default function SettingsPage() {
             }
 
             setRestoreStatus(`✅ Restore complete! Loaded backup from ${new Date(backup.timestamp).toLocaleString()}`);
-        } catch (error: any) {
-            setRestoreStatus(`❌ Error: ${error.message}`);
+        } catch (error: unknown) {
+            setRestoreStatus(`❌ Error: ${error instanceof Error ? error.message : 'Restore failed'}`);
         } finally {
             setLoading(false);
         }
@@ -220,6 +264,49 @@ export default function SettingsPage() {
                                 </div>
                             ))}
                         </div>
+                    </div>
+                </div>
+
+                {/* Hugo long-term memories */}
+                <div className="bg-white dark:bg-[#262626] rounded border border-gray-200 dark:border-[#404040] shadow-sm">
+                    <div className="px-5 py-4 border-b border-gray-200 dark:border-[#404040]">
+                        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-800 dark:text-slate-200">Hugo Memories</h3>
+                        <p className="text-xs text-slate-500 mt-1">Long-term preferences Hugo recalls across chats</p>
+                    </div>
+                    <div className="p-5 space-y-3">
+                        {memoriesLoading && <p className="text-sm text-slate-500">Loading memories…</p>}
+                        {memoriesError && <p className="text-sm text-red-600">{memoriesError}</p>}
+                        {!memoriesLoading && memories.length === 0 && (
+                            <p className="text-sm text-slate-500">No long-term memories yet. Tell Hugo to remember a preference in chat.</p>
+                        )}
+                        {memories.map((m) => (
+                            <div
+                                key={m.id}
+                                className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-sm text-slate-900 dark:text-white">{m.text}</p>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        {m.type} · importance {m.importance} · {new Date(m.createdAt).toLocaleString()}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => void deleteMemory(m.id)}
+                                    disabled={memoriesLoading}
+                                    className="text-xs text-red-600 hover:text-red-700 disabled:opacity-50"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => void refreshMemories()}
+                            className="text-xs text-cyan-700 dark:text-cyan-400 hover:underline"
+                        >
+                            Refresh
+                        </button>
                     </div>
                 </div>
 

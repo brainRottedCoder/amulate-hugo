@@ -124,12 +124,21 @@ export async function deleteDocument(
 }
 
 // Specific hooks for ERP collections
+/** Soft-cap listener to avoid unbounded snapshots on huge tenants (Phase 4). */
+const LARGE_LIST_LIMIT = 2000;
+
 export function useMaterials() {
-    return useFirestoreCollection<{ id: string; part_id: string; part_name: string; part_type: string; used_in_models: string[]; weight: number; blocked_parts: string; successor_parts: string; comment: string; }>('materials');
+    return useFirestoreCollection<{ id: string; part_id: string; part_name: string; part_type: string; used_in_models: string[]; weight: number; blocked_parts: string; successor_parts: string; comment: string; }>('materials', [
+        orderBy('part_id'),
+        limit(LARGE_LIST_LIMIT),
+    ]);
 }
 
 export function useStockLevels() {
-    return useFirestoreCollection<{ id: string; part_id: string; part_name: string; location: string; quantity_available: number; }>('stock_levels');
+    return useFirestoreCollection<{ id: string; part_id: string; part_name: string; location: string; quantity_available: number; }>('stock_levels', [
+        orderBy('part_id'),
+        limit(LARGE_LIST_LIMIT),
+    ]);
 }
 
 export function useDispatchParameters() {

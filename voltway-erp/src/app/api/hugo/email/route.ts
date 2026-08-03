@@ -8,29 +8,36 @@ import {
   generateReorderSubject,
   type ReorderEmailData
 } from '@/lib/email-templates';
+import { requireHugoAuth, jsonError } from '@/lib/auth/apiGuard';
+import { logger } from '@/lib/observability/logger';
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireHugoAuth(request, {
+    permission: 'hugo:email',
+    rateLimit: true,
+  });
+  if (authResult instanceof NextResponse) return authResult;
+  const { user, requestId } = authResult;
+
   try {
     const body = await request.json();
 
-    // Validate required fields
     const { supplierEmail, partId, partName } = body;
 
     if (!supplierEmail) {
       return NextResponse.json(
-        { error: 'Supplier email is required' },
+        { error: 'Supplier email is required', requestId },
         { status: 400 }
       );
     }
 
     if (!partId || !partName) {
       return NextResponse.json(
-        { error: 'Part ID and Part Name are required' },
+        { error: 'Part ID and Part Name are required', requestId },
         { status: 400 }
       );
     }
 
-    // Build email data with defaults
     const emailData: ReorderEmailData = {
       supplierName: body.supplierName || 'Valued Supplier',
       partId: body.partId,
@@ -41,12 +48,16 @@ export async function POST(request: NextRequest) {
       notes: body.notes,
     };
 
-    // Generate email content
     const subject = generateReorderSubject(emailData);
     const html = generateReorderEmailHTML(emailData);
     const text = generateReorderEmailText(emailData);
 
-    // Send email
+    logger.info('hugo_email', {
+      requestId,
+      userId: user.uid,
+      partId: emailData.partId,
+    });
+
     const result = await sendEmail({
       to: supplierEmail,
       subject,
@@ -55,19 +66,18 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.success) {
-      console.error('Email send failed:', result.error);
+      logger.error('hugo_email_failed', { requestId, error: result.error });
       return NextResponse.json(
-        { error: result.error },
+        { error: result.error, requestId },
         { status: 500 }
       );
     }
-
-    console.log('Email sent successfully:', result.messageId);
 
     return NextResponse.json({
       success: true,
       message: `Email sent successfully to ${supplierEmail}`,
       messageId: result.messageId,
+      requestId,
       timestamp: new Date().toISOString(),
       details: {
         partId: emailData.partId,
@@ -76,36 +86,36 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    console.error('Email API Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logger.error('hugo_email_error', {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return jsonError(error, requestId);
   }
 }
 
-// Health check for email service
-export async function GET() {
-  try {
-    const smtpConfigured = !!(
-      process.env.SMTP_HOST &&
-      process.env.SMTP_USER &&
-      process.env.SMTP_PASS
-    );
+export async function GET(request: NextRequest) {
+  const authResult = await requireHugoAuth(request, {
+    permission: 'hugo:chat',
+    rateLimit: false,
+  });
+  if (authResult instanceof NextResponse) return authResult;
 
-    return NextResponse.json({
-      service: 'Nodemailer Email Service',
-      status: smtpConfigured ? 'configured' : 'not_configured',
-      smtp: {
-        host: process.env.SMTP_HOST ? '✓ Set' : '✗ Missing',
-        port: process.env.SMTP_PORT || '587 (default)',
-        user: process.env.SMTP_USER ? '✓ Set' : '✗ Missing',
-        pass: process.env.SMTP_PASS ? '✓ Set' : '✗ Missing',
-        from: process.env.SMTP_FROM || '(will use SMTP_USER)',
-      },
-    });
-  } catch (error) {
-    return NextResponse.json({ error: 'Service check failed' }, { status: 500 });
-  }
+  const smtpConfigured = !!(
+    process.env.SMTP_HOST &&
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASS
+  );
+
+  return NextResponse.json({
+    service: 'Nodemailer Email Service',
+    status: smtpConfigured ? 'configured' : 'not_configured',
+    smtp: {
+      host: process.env.SMTP_HOST ? '✓ Set' : '✗ Missing',
+      port: process.env.SMTP_PORT || '587 (default)',
+      user: process.env.SMTP_USER ? '✓ Set' : '✗ Missing',
+      pass: process.env.SMTP_PASS ? '✓ Set' : '✗ Missing',
+      from: process.env.SMTP_FROM || '(will use SMTP_USER)',
+    },
+  });
 }

@@ -1,9 +1,18 @@
-// Hugo AI API Route - LangChain with MegaLLM (AI-Powered Actions)
+// Hugo AI API Route - LangChain with Fireworks (MiniMax M3)
 
 import { NextRequest, NextResponse } from 'next/server';
-import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { StringOutputParser } from '@langchain/core/output_parsers';
+import { requireHugoAuth, jsonError } from '@/lib/auth/apiGuard';
+import {
+  createFireworksChatModel,
+  getFireworksProviderMeta,
+} from '@/lib/hugo/providers/fireworks';
+import { flags } from '@/lib/config';
+import { getEffectiveFlags } from '@/lib/config/runtimeFlags';
+import { logger } from '@/lib/observability/logger';
+import { runHugoOrchestrator } from '@/lib/hugo/orchestrator';
+import { PROMPT_VERSION } from '@/lib/hugo/prompts';
 
 const HUGO_SYSTEM_PROMPT = `You are Hugo, an intelligent AI-powered procurement assistant for Voltway, an electric scooter startup. You are powered by LangChain and have access to real-time Firebase data.
 
@@ -136,12 +145,28 @@ For bulk updates to ALL suppliers (like changing all emails), use type="update_a
 - S2_KIDS: Kids variant (smaller components)`;
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireHugoAuth(request, {
+    permission: 'hugo:chat',
+    rateLimit: true,
+  });
+  if (authResult instanceof NextResponse) return authResult;
+  const { user, requestId } = authResult;
+
   try {
-    const { message, databaseContext, conversationHistory, file } = await request.json();
+    if (!flags.hugoEnabled) {
+      return NextResponse.json(
+        { error: 'Hugo AI is disabled', requestId },
+        { status: 503 }
+      );
+    }
+
+    const { message, databaseContext, conversationHistory, file, sessionId } = await request.json();
 
     if (!message) {
-      return NextResponse.json({ error: 'Message is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Message is required', requestId }, { status: 400 });
     }
+
+    logger.info('hugo_chat', { requestId, userId: user.uid, role: user.role });
 
     // Process uploaded file content
     let fileContext = '';
@@ -235,21 +260,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const apiKey = process.env.MEGALLM_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'MegaLLM API key not configured. Add MEGALLM_API_KEY to .env.local' }, { status: 500 });
+    // Phase 2: native tool calling path
+    if (getEffectiveFlags().hugoToolCalling) {
+      const out = await runHugoOrchestrator({
+        message,
+        databaseContext,
+        conversationHistory,
+        fileContext,
+        requestId,
+        userId: user.uid,
+        role: user.role,
+        tenantId: user.tenantId,
+        sessionId: typeof sessionId === 'string' ? sessionId : undefined,
+      });
+
+      return NextResponse.json({
+        response: out.response,
+        pendingTool: out.pendingTool || null,
+        action: null,
+        readToolResults: out.readToolResults || [],
+        model: out.model,
+        provider: out.provider,
+        promptVersion: out.promptVersion,
+        mode: out.mode,
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
     }
 
-    // Initialize LangChain with MegaLLM (OpenAI-compatible)
-    const model = new ChatOpenAI({
-      apiKey: apiKey,
-      modelName: 'openai-gpt-oss-120b',
-      temperature: 0.2,
-      maxTokens: 16384,
-      configuration: {
-        baseURL: 'https://ai.megallm.io/v1',
-      },
-    });
+    // Legacy ```action``` parser path (hugoToolCalling=false)
+    const model = createFireworksChatModel();
+    const providerMeta = getFireworksProviderMeta();
 
     // Build messages with conversation context
     const messages: (SystemMessage | HumanMessage | AIMessage)[] = [
@@ -316,15 +357,18 @@ If this is a database action request (add, update, delete, create, change, modif
     return NextResponse.json({
       response: cleanResponse,
       action: action,
-      model: 'openai-gpt-oss-120b',
-      provider: 'MegaLLM + LangChain',
+      model: providerMeta.model,
+      provider: providerMeta.provider,
+      promptVersion: PROMPT_VERSION,
+      mode: 'legacy',
+      requestId,
       timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
-    console.error('Hugo API Error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to process request' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    logger.error('hugo_chat_failed', {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return jsonError(error, requestId);
   }
 }

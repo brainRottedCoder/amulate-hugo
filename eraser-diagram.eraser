@@ -1,0 +1,351 @@
+// ============================================================
+// VOLTWAY ERP - ARCHITECTURE DIAGRAM FOR ERASER.IO
+// Focus: Hugo AI Infrastructure & Full Execution Flow
+// ============================================================
+// Copy this code into eraser.io and render the diagram
+// ============================================================
+
+// ===================
+// MAIN SYSTEM OVERVIEW
+// ===================
+
+title Voltway ERP - AI-Powered Architecture
+
+// User Layer
+User [icon: user, color: blue] {
+  Browser [icon: chrome]
+  Actions [icon: cursor-click]
+}
+
+// Frontend Layer
+Frontend [icon: nextjs, color: black] {
+  Dashboard [icon: layout-dashboard, label: "Dashboard Page"]
+  Inventory [icon: package, label: "Inventory Page"]
+  Procurement [icon: shopping-cart, label: "Procurement Page"]
+  HugoChat [icon: message-circle, label: "Hugo AI Chat", color: purple]
+}
+
+// API Layer
+API [icon: server, color: green] {
+  HugoAPI [icon: brain, label: "/api/hugo", color: purple]
+  ActionsAPI [icon: database, label: "/api/hugo/actions"]
+  EmailAPI [icon: mail, label: "/api/hugo/email"]
+}
+
+// AI Processing Layer
+AILayer [icon: cpu, color: purple, label: "Hugo AI Engine"] {
+  LangChain [icon: link, label: "LangChain Agent"]
+  MegaLLM [icon: brain, label: "MegaLLM 120B"]
+  PDFParser [icon: file-text, label: "pdf-parse"]
+  PromptEngine [icon: terminal, label: "System Prompt"]
+}
+
+// Data Layer
+Database [icon: database, color: orange, label: "Firebase Firestore"] {
+  Materials [icon: box, label: "materials (500+)"]
+  StockLevels [icon: trending-up, label: "stock_levels"]
+  Orders [icon: truck, label: "material_orders"]
+  Suppliers [icon: users, label: "suppliers"]
+}
+
+// External Services
+External [icon: cloud, color: gray] {
+  SMTP [icon: mail, label: "Nodemailer SMTP"]
+  jsPDF [icon: file, label: "jsPDF Export"]
+}
+
+// Connections - Main Flow
+User.Browser -> Frontend.Dashboard: Navigate
+User.Browser -> Frontend.HugoChat: Ask Hugo
+Frontend.HugoChat -> API.HugoAPI: POST message
+API.HugoAPI -> AILayer.LangChain: Process query
+AILayer.LangChain -> AILayer.MegaLLM: Generate response
+AILayer.MegaLLM -> AILayer.LangChain: Return action
+API.HugoAPI -> Frontend.HugoChat: Stream response
+
+// Action Execution Flow
+Frontend.HugoChat -> API.ActionsAPI: Confirm action
+API.ActionsAPI -> Database: Execute CRUD
+Database -> Frontend: Real-time update
+
+// Email Flow
+API.HugoAPI -> API.EmailAPI: Trigger email
+API.EmailAPI -> External.SMTP: Send to supplier
+
+// Data Hooks
+Frontend.Dashboard -> Database.Materials: onSnapshot()
+Frontend.Inventory -> Database.StockLevels: Real-time sync
+
+// ============================================================
+// HUGO AI DETAILED FLOW DIAGRAM
+// ============================================================
+
+title Hugo AI - Request Processing Pipeline
+
+// Stage 1: User Input
+UserInput [icon: user, color: blue, label: "User"] {
+  Message [icon: message-square, label: "Natural Language Query"]
+  FileUpload [icon: paperclip, label: "PDF/Image Attachment"]
+}
+
+// Stage 2: Frontend Processing
+ChatUI [icon: monitor, color: black, label: "Hugo Chat UI"] {
+  InputHandler [icon: type, label: "Message Handler"]
+  FileProcessor [icon: file-plus, label: "File to Base64"]
+  HistoryManager [icon: history, label: "Conversation History (6 msgs)"]
+  ContextBuilder [icon: database, label: "Build DB Context"]
+}
+
+// Stage 3: API Route
+APIRoute [icon: server, color: green, label: "/api/hugo"] {
+  RequestParser [icon: code, label: "Parse Request Body"]
+  PDFExtractor [icon: file-text, label: "pdf-parse Extract"]
+  ContextInjector [icon: plus-circle, label: "Inject Firestore Data"]
+  PromptBuilder [icon: terminal, label: "Build System Prompt"]
+}
+
+// Stage 4: AI Processing
+LLMProcessing [icon: brain, color: purple, label: "LangChain + MegaLLM"] {
+  SystemPrompt [icon: file-code, label: "ERP Context Prompt"]
+  UserQuery [icon: message-circle, label: "User Message"]
+  ConversationMem [icon: database, label: "Chat Memory"]
+  ActionParser [icon: code-2, label: "Parse Action JSON"]
+}
+
+// Stage 5: Response Handling
+ResponseHandler [icon: check-circle, color: green, label: "Response Processing"] {
+  TextResponse [icon: type, label: "Natural Language Answer"]
+  ActionObject [icon: settings, label: "Action Request Object"]
+  EmailTrigger [icon: mail, label: "Email Automation"]
+}
+
+// Stage 6: Action Execution
+ActionExecution [icon: zap, color: orange, label: "Action Executor"] {
+  Validation [icon: shield, label: "Server-side Validation"]
+  FirebaseAdmin [icon: database, label: "Firebase Admin SDK"]
+  ConfirmDialog [icon: alert-circle, label: "User Confirmation"]
+}
+
+// Stage 7: Output
+Output [icon: monitor, color: blue, label: "User Interface"] {
+  ChatBubble [icon: message-circle, label: "AI Response Bubble"]
+  ActionButton [icon: play, label: "Execute Action Button"]
+  SuccessToast [icon: check, label: "Success Notification"]
+}
+
+// Flow Connections
+UserInput.Message -> ChatUI.InputHandler
+UserInput.FileUpload -> ChatUI.FileProcessor
+ChatUI.InputHandler -> ChatUI.ContextBuilder
+ChatUI.HistoryManager -> ChatUI.ContextBuilder
+ChatUI.ContextBuilder -> APIRoute.RequestParser
+
+APIRoute.RequestParser -> APIRoute.PDFExtractor: If file attached
+APIRoute.PDFExtractor -> APIRoute.ContextInjector
+APIRoute.ContextInjector -> APIRoute.PromptBuilder
+APIRoute.PromptBuilder -> LLMProcessing.SystemPrompt
+
+LLMProcessing.SystemPrompt -> LLMProcessing.UserQuery
+LLMProcessing.ConversationMem -> LLMProcessing.UserQuery
+LLMProcessing.UserQuery -> LLMProcessing.ActionParser
+LLMProcessing.ActionParser -> ResponseHandler.TextResponse
+LLMProcessing.ActionParser -> ResponseHandler.ActionObject
+
+ResponseHandler.TextResponse -> Output.ChatBubble
+ResponseHandler.ActionObject -> ActionExecution.ConfirmDialog
+ActionExecution.ConfirmDialog -> ActionExecution.Validation: User confirms
+ActionExecution.Validation -> ActionExecution.FirebaseAdmin
+ActionExecution.FirebaseAdmin -> Output.SuccessToast
+
+// ============================================================
+// DATABASE & REAL-TIME SYNC DIAGRAM
+// ============================================================
+
+title Firestore Real-Time Architecture
+
+// Client A
+ClientA [icon: monitor, color: blue, label: "User A (Browser)"] {
+  ReactState [icon: code, label: "React State"]
+  OnSnapshot [icon: refresh-cw, label: "onSnapshot() Listener"]
+}
+
+// Client B
+ClientB [icon: monitor, color: green, label: "User B (Browser)"] {
+  ReactStateB [icon: code, label: "React State"]
+  OnSnapshotB [icon: refresh-cw, label: "onSnapshot() Listener"]
+}
+
+// API Server
+APIServer [icon: server, color: orange, label: "API Route"] {
+  AdminSDK [icon: key, label: "Firebase Admin SDK"]
+  WriteOp [icon: edit-3, label: "Write Operation"]
+}
+
+// Firestore
+Firestore [icon: database, color: red, label: "Firebase Firestore"] {
+  Collections [icon: folder, label: "Collections"]
+  Triggers [icon: zap, label: "Change Listeners"]
+}
+
+// WebSocket Layer
+WebSockets [icon: radio, color: purple, label: "WebSocket Connections"] {
+  WSA [icon: link, label: "Client A Connection"]
+  WSB [icon: link, label: "Client B Connection"]
+}
+
+// Flow
+APIServer.AdminSDK -> Firestore.Collections: gRPC Write
+Firestore.Triggers -> WebSockets: Broadcast change
+WebSockets.WSA -> ClientA.OnSnapshot: Push update
+WebSockets.WSB -> ClientB.OnSnapshotB: Push update
+ClientA.OnSnapshot -> ClientA.ReactState: setState()
+ClientB.OnSnapshotB -> ClientB.ReactStateB: setState()
+
+// ============================================================
+// EMAIL AUTOMATION FLOW
+// ============================================================
+
+title Hugo AI - Email Automation Pipeline
+
+// Trigger
+EmailTrigger [icon: message-circle, color: purple, label: "Hugo AI Detects"] {
+  ReorderIntent [icon: alert-triangle, label: "Reorder Intent"]
+  SupplierLookup [icon: search, label: "Lookup Supplier"]
+}
+
+// Email Generation
+EmailGen [icon: edit, color: blue, label: "Email Generator"] {
+  Template [icon: file-text, label: "HTML Template"]
+  DataInjection [icon: database, label: "Part Data Injection"]
+  SubjectLine [icon: type, label: "Subject Line"]
+}
+
+// Send Layer
+SendLayer [icon: mail, color: green, label: "Nodemailer"] {
+  SMTPConfig [icon: settings, label: "SMTP Configuration"]
+  Transport [icon: send, label: "Create Transport"]
+  SendMail [icon: check-circle, label: "sendMail()"]
+}
+
+// Result
+EmailResult [icon: inbox, color: orange, label: "Delivery"] {
+  SupplierInbox [icon: mail, label: "Supplier Inbox"]
+  Confirmation [icon: check, label: "Send Confirmation"]
+}
+
+// Flow
+EmailTrigger.ReorderIntent -> EmailTrigger.SupplierLookup
+EmailTrigger.SupplierLookup -> EmailGen.DataInjection
+EmailGen.Template -> EmailGen.DataInjection
+EmailGen.DataInjection -> EmailGen.SubjectLine
+EmailGen.SubjectLine -> SendLayer.SMTPConfig
+SendLayer.SMTPConfig -> SendLayer.Transport
+SendLayer.Transport -> SendLayer.SendMail
+SendLayer.SendMail -> EmailResult.SupplierInbox
+SendLayer.SendMail -> EmailResult.Confirmation
+
+// ============================================================
+// COMPLETE ACTION TYPES DIAGRAM
+// ============================================================
+
+title Hugo AI - Action Types & Execution
+
+// Action Categories
+QueryActions [icon: search, color: blue, label: "Query Actions"] {
+  StockQuery [icon: package, label: "Stock Levels"]
+  SupplierQuery [icon: users, label: "Supplier Info"]
+  OrderQuery [icon: truck, label: "Order Status"]
+  Recommendations [icon: lightbulb, label: "Smart Recommendations"]
+}
+
+DatabaseActions [icon: database, color: green, label: "Database Actions"] {
+  AddRecord [icon: plus, label: "add"]
+  UpdateRecord [icon: edit, label: "update"]
+  DeleteRecord [icon: trash-2, label: "delete"]
+  UpdateStock [icon: trending-up, label: "update_stock"]
+  MarkDelivered [icon: check-circle, label: "mark_delivered"]
+}
+
+DocumentActions [icon: file, color: orange, label: "Document Actions"] {
+  PDFParse [icon: file-text, label: "PDF Text Extraction"]
+  ImageOCR [icon: image, label: "Image OCR"]
+  DataExtract [icon: table, label: "Table Extraction"]
+}
+
+EmailActions [icon: mail, color: purple, label: "Email Actions"] {
+  SendReorder [icon: send, label: "send_email"]
+  SupplierNotify [icon: bell, label: "Supplier Notification"]
+}
+
+ExportActions [icon: download, color: gray, label: "Export Actions"] {
+  ConversationPDF [icon: file, label: "Full Chat PDF"]
+  ReportPDF [icon: file-plus, label: "Single Report PDF"]
+}
+
+// Execution Engine
+ExecutionEngine [icon: cpu, color: red, label: "Action Executor"] {
+  TypeDetection [icon: filter, label: "Detect Action Type"]
+  Validation [icon: shield, label: "Validate Parameters"]
+  Execute [icon: play, label: "Execute Action"]
+  Response [icon: check, label: "Return Result"]
+}
+
+// Connections
+QueryActions -> ExecutionEngine.TypeDetection
+DatabaseActions -> ExecutionEngine.TypeDetection
+DocumentActions -> ExecutionEngine.TypeDetection
+EmailActions -> ExecutionEngine.TypeDetection
+ExportActions -> ExecutionEngine.TypeDetection
+
+ExecutionEngine.TypeDetection -> ExecutionEngine.Validation
+ExecutionEngine.Validation -> ExecutionEngine.Execute
+ExecutionEngine.Execute -> ExecutionEngine.Response
+
+// ============================================================
+// TECH STACK OVERVIEW
+// ============================================================
+
+title Voltway ERP - Technology Stack
+
+// Frontend
+FrontendStack [icon: monitor, color: black, label: "Frontend"] {
+  NextJS [icon: nextjs, label: "Next.js 16.1"]
+  React [icon: react, label: "React 19"]
+  TypeScript [icon: code, label: "TypeScript 5"]
+  Tailwind [icon: palette, label: "Tailwind CSS 4"]
+}
+
+// Backend
+BackendStack [icon: server, color: green, label: "Backend"] {
+  APIRoutes [icon: code, label: "Next.js API Routes"]
+  AdminSDK [icon: key, label: "Firebase Admin SDK"]
+  Validation [icon: shield, label: "Server Validation"]
+}
+
+// AI Layer
+AIStack [icon: brain, color: purple, label: "AI/ML"] {
+  MegaLLM [icon: cpu, label: "MegaLLM 120B"]
+  LangChain [icon: link, label: "LangChain"]
+  PDFParse [icon: file-text, label: "pdf-parse"]
+}
+
+// Data Layer
+DataStack [icon: database, color: orange, label: "Data"] {
+  Firestore [icon: database, label: "Firebase Firestore"]
+  RealTime [icon: refresh-cw, label: "Real-time Listeners"]
+  LocalStorage [icon: hard-drive, label: "localStorage"]
+}
+
+// Services
+ServicesStack [icon: cloud, color: gray, label: "Services"] {
+  Nodemailer [icon: mail, label: "Nodemailer SMTP"]
+  jsPDF [icon: file, label: "jsPDF"]
+  Vercel [icon: triangle, label: "Vercel Deploy"]
+}
+
+// Connections
+FrontendStack -> BackendStack: API Calls
+BackendStack -> AIStack: AI Processing
+BackendStack -> DataStack: CRUD Operations
+AIStack -> ServicesStack: Email & Export
+DataStack -> FrontendStack: Real-time Updates

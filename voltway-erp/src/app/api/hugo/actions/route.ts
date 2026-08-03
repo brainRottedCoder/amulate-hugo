@@ -3,17 +3,82 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
+import { requireHugoAuth, jsonError } from '@/lib/auth/apiGuard';
+import { logger } from '@/lib/observability/logger';
+import { decidePendingTool } from '@/lib/hugo/confirmPending';
+import { PolicyError } from '@/lib/auth/rbac';
 
 // Supported collections
 const COLLECTIONS = ['materials', 'stock_levels', 'dispatch_parameters', 'material_orders', 'sales_orders', 'suppliers'];
 
 export async function POST(request: NextRequest) {
-    try {
-        const { action, collection: collectionName, data, documentId, searchField, searchValue } = await request.json();
+    const body = await request.json();
+    const {
+        action,
+        collection: collectionName,
+        data,
+        documentId,
+        searchField,
+        searchValue,
+        pendingId,
+        decision,
+    } = body;
 
-        if (!action) {
-            return NextResponse.json({ error: 'Action is required' }, { status: 400 });
+    // Phase 2: confirm/reject pending tool calls
+    if (pendingId && decision) {
+        const authResult = await requireHugoAuth(request, {
+            permission: 'hugo:chat',
+            rateLimit: true,
+        });
+        if (authResult instanceof NextResponse) return authResult;
+        const { user, requestId } = authResult;
+
+        try {
+            const out = await decidePendingTool({
+                pendingId,
+                decision,
+                user,
+                requestId,
+            });
+            return NextResponse.json({
+                success: decision === 'confirm' ? (out.result?.ok ?? true) : true,
+                message: out.message,
+                result: out.result || null,
+                requestId,
+            });
+        } catch (error: unknown) {
+            const status =
+                error && typeof error === 'object' && 'status' in error
+                    ? Number((error as { status: number }).status)
+                    : error instanceof PolicyError
+                      ? 403
+                      : 500;
+            if (status === 403 || status === 404 || status === 409) {
+                return NextResponse.json(
+                    {
+                        error: error instanceof Error ? error.message : 'Request failed',
+                        requestId,
+                    },
+                    { status }
+                );
+            }
+            return jsonError(error, requestId);
         }
+    }
+
+    const authResult = await requireHugoAuth(request, {
+        action: action || 'update',
+        rateLimit: true,
+    });
+    if (authResult instanceof NextResponse) return authResult;
+    const { user, requestId } = authResult;
+
+    try {
+        if (!action) {
+            return NextResponse.json({ error: 'Action is required', requestId }, { status: 400 });
+        }
+
+        logger.info('hugo_action', { requestId, userId: user.uid, role: user.role, action });
 
         if (!COLLECTIONS.includes(collectionName)) {
             return NextResponse.json({ error: `Invalid collection. Allowed: ${COLLECTIONS.join(', ')}` }, { status: 400 });
@@ -236,13 +301,13 @@ export async function POST(request: NextRequest) {
             }
 
             default:
-                return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
+                return NextResponse.json({ error: `Unknown action: ${action}`, requestId }, { status: 400 });
         }
-    } catch (error: any) {
-        console.error('Hugo Action Error:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to perform action' },
-            { status: 500 }
-        );
+    } catch (error: unknown) {
+        logger.error('hugo_action_failed', {
+            requestId,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return jsonError(error, requestId);
     }
 }

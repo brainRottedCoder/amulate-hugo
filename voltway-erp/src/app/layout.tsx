@@ -1,16 +1,19 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import Sidebar from '@/components/layout/Sidebar';
+import { AuthProvider } from '@/components/auth/AuthProvider';
+import AuthGate from '@/components/auth/AuthGate';
+import AppShell from '@/components/layout/AppShell';
 
 const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
+  subsets: ['latin'],
+  variable: '--font-inter',
 });
 
 export const metadata: Metadata = {
-  title: "Voltway ERP - Operations Command",
-  description: "AI-Native ERP for Voltway Electric Scooters",
+  title: 'Voltway ERP - Operations Command',
+  description: 'AI-Native ERP for Voltway Electric Scooters',
 };
 
 export default function RootLayout({
@@ -42,11 +45,14 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} font-sans antialiased bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen overflow-hidden flex`}>
-        <Sidebar />
-        <main className="flex-1 h-screen overflow-y-auto bg-slate-50 dark:bg-slate-950 flex flex-col">
-          {children}
-        </main>
+      <body
+        className={`${inter.variable} font-sans antialiased bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen overflow-hidden`}
+      >
+        <AuthProvider>
+          <AuthGate>
+            <AppShell sidebar={<Sidebar />}>{children}</AppShell>
+          </AuthGate>
+        </AuthProvider>
       </body>
     </html>
   );

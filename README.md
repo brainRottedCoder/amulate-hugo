@@ -414,6 +414,19 @@ Import sample data from `../hugo_data_samples/`:
 - Stock levels
 - Orders and suppliers
 
+### Step 7: RAG reindex (Phase 4)
+
+Hugo retrieves top-k materials instead of dumping the full catalog (`HUGO_RAG=true` by default).
+
+```bash
+cd voltway-erp
+npm run reindex -- --dry-run   # count materials without writing embeddings
+npm run reindex                # write material_embeddings
+npm run scale:smoke            # 5k in-memory latency + token reduction check
+```
+
+Rollback: set `HUGO_RAG=false` in `.env.local`. See `docs/adr/0004-rag-provider-choice.md`.
+
 ---
 
 ## 📖 Usage Guide

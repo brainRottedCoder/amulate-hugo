@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userTenant() {
+      return ('tenantId' in userDoc() && userDoc().tenantId != null)
+        ? userDoc().tenantId
+        : 'default';
+    }
+
+    function isAdmin() {
+      return signedIn() && userDoc().role == 'admin';
+    }
+
+    function tenantOk(data) {
+      return isAdmin()
+        || !('tenantId' in data)
+        || data.tenantId == null
+        || data.tenantId == userTenant();
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    match /tenants/{tenantId} {
+      allow read: if signedIn() && (tenantId == userTenant() || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /tenant_budgets/{tenantId} {
+      allow read: if signedIn() && (tenantId == userTenant() || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /chat_sessions/{id} {
+      allow read: if signedIn() && tenantOk(resource.data)
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && tenantOk(request.resource.data);
+      allow update, delete: if signedIn() && tenantOk(resource.data)
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /memories/{id} {
+      allow read: if signedIn() && tenantOk(resource.data)
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if signedIn() && tenantOk(request.resource.data)
+        && (request.resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Default ERP collections: authenticated + tenant match when field present
+    match /{collection}/{docId} {
+      allow read: if signedIn() && (resource == null || tenantOk(resource.data));
+      allow create: if signedIn() && tenantOk(request.resource.data);
+      allow update, delete: if signedIn() && tenantOk(resource.data);
+    }
+  }
+}

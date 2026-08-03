@@ -5,6 +5,8 @@ import Header from '@/components/layout/Header';
 import Modal, { ConfirmDialog } from '@/components/ui/Modal';
 import { useMaterials, useStockLevels, useDispatchParameters, addDocument, updateDocument, deleteDocument } from '@/lib/useFirestore';
 
+const PAGE_SIZE = 50;
+
 interface Material {
     id?: string;
     part_id: string;
@@ -50,6 +52,7 @@ export default function MaterialsPage() {
     const { data: dispatchParameters } = useDispatchParameters();
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState('all');
+    const [page, setPage] = useState(0);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [currentMaterial, setCurrentMaterial] = useState<Material>(emptyMaterial);
@@ -71,6 +74,13 @@ export default function MaterialsPage() {
         const matchesType = typeFilter === 'all' || m.part_type === typeFilter;
         return matchesSearch && matchesType;
     });
+
+    const pageCount = Math.max(1, Math.ceil(filteredMaterials.length / PAGE_SIZE));
+    const safePage = Math.min(page, pageCount - 1);
+    const pagedMaterials = filteredMaterials.slice(
+        safePage * PAGE_SIZE,
+        safePage * PAGE_SIZE + PAGE_SIZE
+    );
 
     const openAddModal = () => {
         setCurrentMaterial(emptyMaterial);
@@ -271,14 +281,14 @@ export default function MaterialsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-[#404040]">
-                                {filteredMaterials.length === 0 ? (
+                                {pagedMaterials.length === 0 ? (
                                     <tr>
                                         <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
                                             No materials found. Click "Add Part" to create one.
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredMaterials.map((material: any) => {
+                                    pagedMaterials.map((material: any) => {
                                         const isBlocked = material.blocked_parts === 'Blocked';
                                         const hasSuccessor = material.successor_parts !== '';
                                         const { stock, dispatch } = getStockInfo(material.part_id);
@@ -366,8 +376,33 @@ export default function MaterialsPage() {
                         </table>
                     </div>
                     {/* Footer */}
-                    <div className="px-5 py-4 border-t border-gray-200 dark:border-[#404040] flex justify-between items-center">
-                        <p className="text-sm text-slate-500">Showing {filteredMaterials.length} of {materials.length} parts</p>
+                    <div className="px-5 py-4 border-t border-gray-200 dark:border-[#404040] flex justify-between items-center gap-3">
+                        <p className="text-sm text-slate-500">
+                            Showing {pagedMaterials.length ? safePage * PAGE_SIZE + 1 : 0}–
+                            {safePage * PAGE_SIZE + pagedMaterials.length} of {filteredMaterials.length} parts
+                            {materials.length !== filteredMaterials.length ? ` (filtered from ${materials.length})` : ''}
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                disabled={safePage <= 0}
+                                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                                className="px-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+                            >
+                                Prev
+                            </button>
+                            <span className="text-xs text-slate-500">
+                                Page {safePage + 1} / {pageCount}
+                            </span>
+                            <button
+                                type="button"
+                                disabled={safePage >= pageCount - 1}
+                                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                                className="px-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
