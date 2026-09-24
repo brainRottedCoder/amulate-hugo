@@ -52,5 +52,5 @@ export const RATE_LIMIT = {
   windowMs: 60_000,
 } as const;
 
-/** Cookie set client-side so middleware can soft-gate ERP pages */
+/** Cookie set client-side so the proxy can soft-gate ERP pages */
 export const AUTH_COOKIE_NAME = 'voltway_auth';

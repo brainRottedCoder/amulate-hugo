@@ -10,7 +10,7 @@ function isPublic(pathname: string): boolean {
   );
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const requestId = crypto.randomUUID();
   const { pathname } = request.nextUrl;
 
