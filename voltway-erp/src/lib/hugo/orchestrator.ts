@@ -36,6 +36,7 @@ import {
   captureException,
 } from '@/lib/observability/tracing';
 import { recordTokenUsage } from '@/lib/tenants/budgets';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 export { hashArgs };
 
@@ -88,7 +89,7 @@ export async function runHugoOrchestrator(
   input: OrchestratorInput,
   opts?: { storeMode?: 'firestore' | 'memory' }
 ): Promise<OrchestratorResponse> {
-  const storeMode = opts?.storeMode || 'firestore';
+  const storeMode = opts?.storeMode || getServerStoreMode();
   const flags = getEffectiveFlags();
   recordHugoRequest();
   const span = startSpan('hugo_orchestrator', {
@@ -121,20 +122,27 @@ export async function runHugoOrchestrator(
         mode: storeMode,
       });
     }
-    const retrieved = await retrieveFactCards({
-      query: input.message,
-      sessionId: input.sessionId,
-      mode: storeMode,
-      includeDocChunks: Boolean(input.sessionId && input.fileContext),
-      stats: {
-        materialsCount: input.databaseContext?.materialsCount,
-        healthyCount: input.databaseContext?.healthyCount,
-        lowCount: input.databaseContext?.lowCount,
-        criticalCount: input.databaseContext?.criticalCount,
-      },
-    });
-    retrievedFacts = retrieved.factText;
-    ragTokens = retrieved.estimatedTokens;
+    try {
+      const retrieved = await retrieveFactCards({
+        query: input.message,
+        sessionId: input.sessionId,
+        mode: storeMode,
+        includeDocChunks: Boolean(input.sessionId && input.fileContext),
+        stats: {
+          materialsCount: input.databaseContext?.materialsCount,
+          healthyCount: input.databaseContext?.healthyCount,
+          lowCount: input.databaseContext?.lowCount,
+          criticalCount: input.databaseContext?.criticalCount,
+        },
+      });
+      retrievedFacts = retrieved.factText;
+      ragTokens = retrieved.estimatedTokens;
+    } catch (e) {
+      logger.warn('hugo_rag_degraded', {
+        requestId: input.requestId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
     logger.info('hugo_rag_vs_dump', {
       requestId: input.requestId,
       ragTokens,

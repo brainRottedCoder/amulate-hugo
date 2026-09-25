@@ -1,5 +1,6 @@
 import { addDoc, collection, doc, getDoc, getDocs, orderBy, query, updateDoc, where, limit as fsLimit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getServerStoreMode } from '@/lib/storeMode';
 import type { AgentRun } from '@/lib/hugo/memory/policy';
 
 type Mode = 'firestore' | 'memory';
@@ -21,7 +22,7 @@ export async function createAgentRun(
     sessionId?: string;
     steps?: AgentRun['steps'];
   },
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<AgentRun> {
   const now = new Date().toISOString();
   const payload: Omit<AgentRun, 'id'> = {
@@ -51,7 +52,7 @@ export async function createAgentRun(
 
 export async function getAgentRun(
   runId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<AgentRun | null> {
   if (mode === 'memory') return memRuns.get(runId) || null;
   const snap = await getDoc(doc(db, 'agent_runs', runId));
@@ -63,7 +64,7 @@ export async function getAgentRun(
 export async function getActiveAgentRunForSession(
   sessionId: string,
   userId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<AgentRun | null> {
   if (mode === 'memory') {
     const runs = [...memRuns.values()]
@@ -97,7 +98,7 @@ export async function updateAgentRunStep(
   stepId: string,
   status: 'pending' | 'done' | 'failed',
   note?: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<AgentRun> {
   const run = await getAgentRun(runId, mode);
   if (!run) {

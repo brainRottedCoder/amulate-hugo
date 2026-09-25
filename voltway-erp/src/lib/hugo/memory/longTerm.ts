@@ -10,6 +10,7 @@ import {
   limit as fsLimit,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getServerStoreMode, type StoreMode } from '@/lib/storeMode';
 import {
   assertMemoryOwner,
   MEMORY_POLICY,
@@ -17,7 +18,7 @@ import {
   type MemoryType,
 } from '@/lib/hugo/memory/policy';
 
-type Mode = 'firestore' | 'memory';
+type Mode = StoreMode;
 
 const memLTM = new Map<string, LongTermMemory>();
 
@@ -37,7 +38,7 @@ export async function createLongTermMemory(
     importance?: number;
     sourceSessionId?: string;
   },
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<LongTermMemory> {
   const payload = {
     userId: input.userId,
@@ -61,7 +62,7 @@ export async function createLongTermMemory(
 
 export async function listLongTermMemories(
   userId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<LongTermMemory[]> {
   if (mode === 'memory') {
     return [...memLTM.values()]
@@ -83,7 +84,7 @@ export async function listLongTermMemories(
 export async function retrieveLongTermMemories(
   userId: string,
   queryText: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<LongTermMemory[]> {
   const all = await listLongTermMemories(userId, mode);
   const q = queryText.toLowerCase();
@@ -102,7 +103,7 @@ export async function retrieveLongTermMemories(
 export async function deleteLongTermMemory(
   memoryId: string,
   requesterId: string,
-  mode: Mode = 'firestore',
+  mode: Mode = getServerStoreMode(),
   isAdmin = false
 ): Promise<void> {
   if (mode === 'memory') {
@@ -154,7 +155,7 @@ export async function maybeExtractAndStoreMemories(
   userId: string,
   userMessage: string,
   sessionId?: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<LongTermMemory[]> {
   const candidates = extractPreferenceCandidates(userMessage);
   const created: LongTermMemory[] = [];

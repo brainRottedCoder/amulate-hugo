@@ -22,7 +22,7 @@ const intelligenceItems = [
 
 export default function Sidebar() {
     const pathname = usePathname();
-    const { user, signOut } = useAuth();
+    const { user, signOut, isDemo } = useAuth();
 
     const initials = (user?.displayName || user?.email || 'U')
         .split(/[\s@]/)
@@ -141,7 +141,9 @@ export default function Sidebar() {
                         <p className="text-[13px] font-medium text-slate-900 dark:text-white truncate">
                             {user?.displayName || user?.email || 'User'}
                         </p>
-                        <p className="text-[11px] text-slate-500 capitalize">{user?.role || 'viewer'}</p>
+                        <p className="text-[11px] text-slate-500 capitalize">
+                          {isDemo ? 'demo · ' : ''}{user?.role || 'viewer'}
+                        </p>
                     </div>
                     <button
                         type="button"

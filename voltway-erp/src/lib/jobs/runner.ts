@@ -6,6 +6,7 @@ import { addDoc, collection, doc, getDoc, getDocs, query, updateDoc, where } fro
 import { db } from '@/lib/firebase';
 import { buildIdempotencyKey } from '@/lib/jobs/idempotency';
 import { logger } from '@/lib/observability/logger';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'dead';
 
@@ -64,7 +65,7 @@ export async function enqueueJob(input: {
   /** Skip run — enqueue only */
   defer?: boolean;
 }): Promise<JobRecord> {
-  const mode = input.mode || 'firestore';
+  const mode = input.mode || getServerStoreMode();
   const idempotencyKey = buildIdempotencyKey(input.type, input.payload);
   const existing = await findByIdempotencyKey(idempotencyKey, mode);
   if (existing) {
@@ -125,7 +126,7 @@ async function saveJob(job: JobRecord, mode: Mode): Promise<void> {
   await updateDoc(doc(db, 'jobs', id), rest);
 }
 
-export async function runJob(jobId: string, mode: Mode = 'firestore'): Promise<JobRecord> {
+export async function runJob(jobId: string, mode: Mode = getServerStoreMode()): Promise<JobRecord> {
   let job = await loadJob(jobId, mode);
   if (!job) throw new Error(`Job not found: ${jobId}`);
 
@@ -191,7 +192,7 @@ export async function runJob(jobId: string, mode: Mode = 'firestore'): Promise<J
 /** Explicit retry for failed jobs (does not bypass completed idempotency). */
 export async function retryJob(
   jobId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<JobRecord> {
   const job = await loadJob(jobId, mode);
   if (!job) throw new Error(`Job not found: ${jobId}`);

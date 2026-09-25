@@ -11,6 +11,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 type Mode = 'firestore' | 'memory';
 
@@ -36,7 +37,7 @@ export function seedPrivacyMemory(data: Partial<MemStore>): void {
 
 export async function exportUserData(
   userId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<Record<string, unknown>> {
   if (mode === 'memory') {
     const sessions = mem.sessions.filter((s) => s.userId === userId);
@@ -67,7 +68,7 @@ export async function exportUserData(
 
 export async function deleteUserData(
   userId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<{ deletedSessions: number; deletedMemories: number }> {
   if (mode === 'memory') {
     const sessions = mem.sessions.filter((s) => s.userId === userId);
@@ -106,7 +107,7 @@ export async function runRetentionJob(input: {
   mode?: Mode;
   now?: Date;
 }): Promise<{ purgedMessages: number }> {
-  const mode = input.mode || 'firestore';
+  const mode = input.mode || getServerStoreMode();
   const now = input.now || new Date();
   const cutoff = now.getTime() - input.olderThanDays * 86400_000;
 

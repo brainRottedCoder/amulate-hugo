@@ -1,11 +1,10 @@
 import {
   collection,
   getDocs,
-  query,
-  where,
-  limit as fsLimit,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getCatalogRows } from '@/lib/catalog';
+import { getServerStoreMode } from '@/lib/storeMode';
 import {
   queryInventorySchema,
   queryOrdersSchema,
@@ -13,6 +12,17 @@ import {
 } from '@/lib/validation/hugo-tools';
 import type { HugoToolDefinition } from '@/lib/hugo/tools/types';
 import type { z } from 'zod';
+
+async function loadCollection(name: string): Promise<Array<Record<string, unknown>>> {
+  if (getServerStoreMode() === 'memory') return getCatalogRows(name);
+  try {
+    const snap = await getDocs(collection(db, name));
+    if (snap.empty) return getCatalogRows(name);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch {
+    return getCatalogRows(name);
+  }
+}
 
 function stockStatus(qty: number, minStock: number): 'critical' | 'low' | 'healthy' {
   if (qty <= minStock * 0.5) return 'critical';
@@ -39,18 +49,16 @@ export const queryInventoryTool: HugoToolDefinition<
   },
   async execute(_ctx, args) {
     const parsed = queryInventorySchema.parse(args);
-    const stockSnap = await getDocs(collection(db, 'stock_levels'));
-    const dispatchSnap = await getDocs(collection(db, 'dispatch_parameters'));
+    const stockRows = await loadCollection('stock_levels');
+    const dispatchRows = await loadCollection('dispatch_parameters');
     const minMap = new Map<string, number>();
-    dispatchSnap.docs.forEach((d) => {
-      const data = d.data();
-      minMap.set(data.part_id, Number(data.min_stock_level ?? 50));
+    dispatchRows.forEach((data) => {
+      minMap.set(String(data.part_id), Number(data.min_stock_level ?? 50));
     });
 
-    let rows = stockSnap.docs.map((d) => {
-      const data = d.data();
+    let rows = stockRows.map((data) => {
       const qty = Number(data.quantity_available ?? 0);
-      const min = minMap.get(data.part_id) ?? 50;
+      const min = minMap.get(String(data.part_id)) ?? 50;
       return {
         part_id: data.part_id,
         part_name: data.part_name,
@@ -96,9 +104,8 @@ export const querySuppliersTool: HugoToolDefinition<
   },
   async execute(_ctx, args) {
     const parsed = querySuppliersSchema.parse(args);
-    const snap = await getDocs(collection(db, 'suppliers'));
-    let rows = snap.docs.map((d) => {
-      const data = d.data();
+    const snap = await loadCollection('suppliers');
+    let rows = snap.map((data) => {
       return {
         supplier_id: data.supplier_id,
         supplier_name: data.supplier_name,
@@ -152,29 +159,20 @@ export const queryOrdersTool: HugoToolDefinition<z.infer<typeof queryOrdersSchem
     const result: Record<string, unknown> = {};
 
     if (parsed.kind === 'material' || parsed.kind === 'all') {
-      const constraints = [];
-      if (parsed.orderId) constraints.push(where('order_id', '==', parsed.orderId));
-      else if (parsed.partId) constraints.push(where('part_id', '==', parsed.partId));
-      const q = constraints.length
-        ? query(collection(db, 'material_orders'), ...constraints, fsLimit(parsed.limit))
-        : query(collection(db, 'material_orders'), fsLimit(parsed.limit));
-      const snap = await getDocs(q);
-      let items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      let items = await loadCollection('material_orders');
+      if (parsed.orderId) items = items.filter((i) => i.order_id === parsed.orderId);
+      else if (parsed.partId) items = items.filter((i) => i.part_id === parsed.partId);
       if (parsed.status) {
         items = items.filter(
-          (i) =>
-            String((i as { status?: string }).status || '').toLowerCase() ===
-            parsed.status!.toLowerCase()
+          (i) => String(i.status || '').toLowerCase() === parsed.status!.toLowerCase()
         );
       }
-      result.material_orders = items;
+      result.material_orders = items.slice(0, parsed.limit);
     }
 
     if (parsed.kind === 'sales' || parsed.kind === 'all') {
-      const snap = await getDocs(
-        query(collection(db, 'sales_orders'), fsLimit(parsed.limit))
-      );
-      result.sales_orders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const items = await loadCollection('sales_orders');
+      result.sales_orders = items.slice(0, parsed.limit);
     }
 
     return {

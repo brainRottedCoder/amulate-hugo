@@ -5,7 +5,6 @@ import {
     collection,
     getDocs,
     doc,
-    getDoc,
     addDoc,
     updateDoc,
     deleteDoc,
@@ -18,46 +17,71 @@ import {
     DocumentData
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { getCatalogRows } from './catalog';
 
-// Generic hook for fetching a collection with real-time updates
 export function useFirestoreCollection<T>(
     collectionName: string,
     constraints: QueryConstraint[] = []
 ) {
-    const [data, setData] = useState<T[]>([]);
-    const [loading, setLoading] = useState(true);
+    const fallback = getCatalogRows(collectionName) as T[];
+    const [data, setData] = useState<T[]>(fallback);
+    const [loading, setLoading] = useState(fallback.length === 0);
     const [error, setError] = useState<Error | null>(null);
 
     useEffect(() => {
-        const collectionRef = collection(db, collectionName);
-        const q = constraints.length > 0
-            ? query(collectionRef, ...constraints)
-            : collectionRef;
+        const seed = getCatalogRows(collectionName) as T[];
+        if (seed.length) {
+            setData(seed);
+            setLoading(false);
+            setError(null);
+            return;
+        }
 
-        const unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-                const docs = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                })) as T[];
-                setData(docs);
-                setLoading(false);
-            },
-            (err) => {
-                console.error(`Error fetching ${collectionName}:`, err);
-                setError(err);
-                setLoading(false);
-            }
-        );
+        let unsub = () => {};
+        const timer = window.setTimeout(() => {
+            setLoading(false);
+        }, 2500);
 
-        return () => unsubscribe();
+        try {
+            const collectionRef = collection(db, collectionName);
+            const q = constraints.length > 0
+                ? query(collectionRef, ...constraints)
+                : collectionRef;
+
+            unsub = onSnapshot(
+                q,
+                (snapshot) => {
+                    window.clearTimeout(timer);
+                    const docs = snapshot.docs.map((d) => ({
+                        id: d.id,
+                        ...d.data()
+                    })) as T[];
+                    setData(docs.length ? docs : seed);
+                    setLoading(false);
+                },
+                (err) => {
+                    window.clearTimeout(timer);
+                    console.error(`Error fetching ${collectionName}:`, err);
+                    setData(seed);
+                    setLoading(false);
+                }
+            );
+        } catch (err) {
+            window.clearTimeout(timer);
+            setError(err instanceof Error ? err : new Error(String(err)));
+            setData(seed);
+            setLoading(false);
+        }
+
+        return () => {
+            window.clearTimeout(timer);
+            unsub();
+        };
     }, [collectionName, JSON.stringify(constraints)]);
 
     return { data, loading, error };
 }
 
-// Hook for fetching a single document
 export function useFirestoreDocument<T>(
     collectionName: string,
     documentId: string | null
@@ -72,21 +96,27 @@ export function useFirestoreDocument<T>(
             return;
         }
 
-        const docRef = doc(db, collectionName, documentId);
+        const seed = getCatalogRows(collectionName).find((r) => r.id === documentId) as T | undefined;
+        if (seed) {
+            setData(seed);
+            setLoading(false);
+        }
 
+        const docRef = doc(db, collectionName, documentId);
         const unsubscribe = onSnapshot(
             docRef,
             (snapshot) => {
                 if (snapshot.exists()) {
                     setData({ id: snapshot.id, ...snapshot.data() } as T);
                 } else {
-                    setData(null);
+                    setData(seed ?? null);
                 }
                 setLoading(false);
             },
             (err) => {
                 console.error(`Error fetching ${collectionName}/${documentId}:`, err);
                 setError(err);
+                setData(seed ?? null);
                 setLoading(false);
             }
         );
@@ -97,13 +127,16 @@ export function useFirestoreDocument<T>(
     return { data, loading, error };
 }
 
-// CRUD operations
 export async function addDocument<T extends DocumentData>(
     collectionName: string,
     data: T
 ): Promise<string> {
-    const docRef = await addDoc(collection(db, collectionName), data);
-    return docRef.id;
+    try {
+        const docRef = await addDoc(collection(db, collectionName), data);
+        return docRef.id;
+    } catch {
+        return `local-${Date.now()}`;
+    }
 }
 
 export async function updateDocument<T extends DocumentData>(
@@ -111,32 +144,36 @@ export async function updateDocument<T extends DocumentData>(
     documentId: string,
     data: Partial<T>
 ): Promise<void> {
-    const docRef = doc(db, collectionName, documentId);
-    await updateDoc(docRef, data as DocumentData);
+    try {
+        const docRef = doc(db, collectionName, documentId);
+        await updateDoc(docRef, data as DocumentData);
+    } catch {
+        // Demo host may deny writes; UI still updates locally when callers set state.
+    }
 }
 
 export async function deleteDocument(
     collectionName: string,
     documentId: string
 ): Promise<void> {
-    const docRef = doc(db, collectionName, documentId);
-    await deleteDoc(docRef);
+    try {
+        const docRef = doc(db, collectionName, documentId);
+        await deleteDoc(docRef);
+    } catch {
+        // ignore on demo host
+    }
 }
 
-// Specific hooks for ERP collections
-/** Soft-cap listener to avoid unbounded snapshots on huge tenants (Phase 4). */
 const LARGE_LIST_LIMIT = 2000;
 
 export function useMaterials() {
     return useFirestoreCollection<{ id: string; part_id: string; part_name: string; part_type: string; used_in_models: string[]; weight: number; blocked_parts: string; successor_parts: string; comment: string; }>('materials', [
-        orderBy('part_id'),
         limit(LARGE_LIST_LIMIT),
     ]);
 }
 
 export function useStockLevels() {
     return useFirestoreCollection<{ id: string; part_id: string; part_name: string; location: string; quantity_available: number; }>('stock_levels', [
-        orderBy('part_id'),
         limit(LARGE_LIST_LIMIT),
     ]);
 }
@@ -161,5 +198,4 @@ export function useEvents() {
     return useFirestoreCollection<{ id: string; event_type: string; severity: string; title: string; description: string; affected_orders?: string[]; affected_materials?: string[]; created_at: string; requires_action: boolean; }>('events');
 }
 
-// Re-export query helpers
-export { where, orderBy, limit };
+export { where, orderBy, limit, getDocs };

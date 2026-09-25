@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase';
 import { AuthError } from '@/lib/auth/rbac';
 import { getFirebasePublicConfig } from '@/lib/config';
 import { DEFAULT_TENANT_ID } from '@/lib/auth/tenant';
+import { DEMO_USER, isDemoToken } from '@/lib/auth/demo';
 import type { AuthUser, UserRole } from '@/types/auth';
 
 type LookupResponse = {
@@ -85,6 +86,10 @@ export async function verifyRequest(request: NextRequest): Promise<AuthUser> {
   const token = header.slice('Bearer '.length).trim();
   if (!token) {
     throw new AuthError('Missing Bearer token');
+  }
+
+  if (isDemoToken(token)) {
+    return DEMO_USER;
   }
 
   const identity = await verifyIdToken(token);

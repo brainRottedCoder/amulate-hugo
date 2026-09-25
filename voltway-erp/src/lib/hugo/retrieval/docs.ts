@@ -4,6 +4,7 @@
 
 import { chunkText } from '@/lib/hugo/retrieval/chunker';
 import { upsertDocChunk } from '@/lib/hugo/retrieval/index';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 export async function ingestDocumentText(input: {
   sessionId: string;
@@ -11,7 +12,7 @@ export async function ingestDocumentText(input: {
   docId?: string;
   mode?: 'firestore' | 'memory';
 }): Promise<{ chunkCount: number }> {
-  const mode = input.mode || 'firestore';
+  const mode = input.mode || getServerStoreMode();
   const docId = input.docId || `doc_${Date.now()}`;
   const chunks = chunkText(input.text, { chunkSize: 800, overlap: 120 });
   for (const c of chunks) {

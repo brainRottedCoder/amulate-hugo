@@ -10,6 +10,7 @@ import {
 } from '@/lib/hugo/retrieval/index';
 import { MEMORY_POLICY, estimateTokens } from '@/lib/hugo/memory/policy';
 import { logger } from '@/lib/observability/logger';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 export type FactCard = {
   kind: 'material' | 'stock' | 'doc_chunk' | 'stat';
@@ -43,7 +44,7 @@ export async function retrieveFactCards(input: {
     criticalCount?: number;
   };
 }): Promise<{ cards: FactCard[]; factText: string; estimatedTokens: number }> {
-  const mode = input.mode || 'firestore';
+  const mode = input.mode || getServerStoreMode();
   const topK = input.topK ?? 8;
   const hits = await searchMaterialsByEmbedding(input.query, topK, mode);
   const partIds = hits.map((h) => h.part_id);

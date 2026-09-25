@@ -14,6 +14,7 @@ import {
   noteTrafficAndDetectAnomaly,
 } from '@/lib/tenants/budgets';
 import type { AuthUser, HugoPermission } from '@/types/auth';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 export function jsonError(error: unknown, requestId?: string) {
   if (error instanceof AuthError || error instanceof PolicyError) {
@@ -52,14 +53,10 @@ export async function requireHugoAuth(
     noteTrafficAndDetectAnomaly(user.tenantId);
 
     if (!options?.skipBudget) {
-      const budgetMode =
-        process.env.BUDGET_STORE === 'memory' || process.env.VITEST
-          ? 'memory'
-          : 'firestore';
       await assertWithinBudget({
         tenantId: user.tenantId,
         role: user.role,
-        mode: budgetMode,
+        mode: getServerStoreMode(),
       });
     }
 

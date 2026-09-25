@@ -2,6 +2,7 @@ import { addDoc, collection, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { AuditLog, AuditStatus } from '@/types/hugo';
 import { createHash } from 'crypto';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 export function hashArgs(args: Record<string, unknown>): string {
   return createHash('sha256').update(JSON.stringify(args)).digest('hex').slice(0, 16);
@@ -43,7 +44,7 @@ export function getMemoryAudits(): AuditLog[] {
 
 export async function writeAuditLogFlexible(
   entry: Omit<AuditLog, 'id' | 'ts'> & { ts?: string },
-  mode: 'firestore' | 'memory' = 'firestore'
+  mode: 'firestore' | 'memory' = getServerStoreMode()
 ): Promise<string> {
   if (mode === 'memory') {
     const id = `audit_${memoryAudits.length + 1}`;

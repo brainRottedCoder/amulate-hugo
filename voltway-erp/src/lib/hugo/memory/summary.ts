@@ -9,6 +9,7 @@ import {
   type SessionSummary,
 } from '@/lib/hugo/memory/policy';
 import { listMessages } from '@/lib/hugo/memory/session';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 type Mode = 'firestore' | 'memory';
 
@@ -26,7 +27,7 @@ export { shouldTriggerSummary };
 
 export async function getSessionSummary(
   sessionId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<SessionSummary | null> {
   if (mode === 'memory') return memSummaries.get(sessionId) || null;
   const snap = await getDoc(doc(db, 'session_summaries', sessionId));
@@ -36,7 +37,7 @@ export async function getSessionSummary(
 
 export async function maybeSummarizeSession(
   sessionId: string,
-  mode: Mode = 'firestore',
+  mode: Mode = getServerStoreMode(),
   opts?: { force?: boolean; llm?: boolean }
 ): Promise<SessionSummary | null> {
   const messages = await listMessages(sessionId, mode);

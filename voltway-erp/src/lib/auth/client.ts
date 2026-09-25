@@ -21,6 +21,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { AUTH_COOKIE_NAME } from '@/lib/config';
 import { DEFAULT_TENANT_ID } from '@/lib/auth/tenant';
+import { DEMO_TOKEN, readDemoSession, writeDemoSession } from '@/lib/auth/demo';
 import type { UserProfile, UserRole } from '@/types/auth';
 
 export function subscribeToAuth(callback: (user: User | null) => void) {
@@ -42,14 +43,25 @@ export async function signUp(email: string, password: string, displayName?: stri
 }
 
 export async function signOut() {
-  await firebaseSignOut(auth);
+  writeDemoSession(false);
+  try {
+    await firebaseSignOut(auth);
+  } catch {
+    // Demo sessions have no Firebase user.
+  }
   setAuthCookie(false);
 }
 
 export async function getIdToken(forceRefresh = false): Promise<string | null> {
+  if (readDemoSession()) return DEMO_TOKEN;
   const user = auth.currentUser;
   if (!user) return null;
   return user.getIdToken(forceRefresh);
+}
+
+export function enterDemoSession() {
+  writeDemoSession(true);
+  setAuthCookie(true);
 }
 
 export function setAuthCookie(authenticated: boolean) {

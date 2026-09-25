@@ -5,6 +5,7 @@
 
 import { doc, setDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getServerStoreMode } from '@/lib/storeMode';
 import {
   cosineSimilarity,
   embedText,
@@ -58,7 +59,7 @@ export async function upsertMaterialEmbedding(
     used_in_models?: string[];
     comment?: string;
   },
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<IndexedMaterial> {
   const embedding = embedText(materialEmbedText(material));
   const row: IndexedMaterial = {
@@ -81,7 +82,7 @@ export async function upsertMaterialEmbedding(
 
 export async function setLiveStock(
   stock: LiveStock,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<void> {
   if (mode === 'memory') {
     memStock.set(stock.part_id, stock);
@@ -93,12 +94,27 @@ export async function setLiveStock(
 
 export async function hydrateStock(
   partIds: string[],
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<LiveStock[]> {
   if (mode === 'memory') {
-    return partIds
+    const fromMem = partIds
       .map((id) => memStock.get(id))
       .filter((s): s is LiveStock => Boolean(s));
+    if (fromMem.length) return fromMem;
+    const { getCatalogRows } = await import('@/lib/catalog');
+    const stock = getCatalogRows('stock_levels');
+    const dispatch = getCatalogRows('dispatch_parameters');
+    return partIds.map((id) => {
+      const s = stock.find((r) => String(r.part_id) === id);
+      const d = dispatch.find((r) => String(r.part_id) === id);
+      return {
+        part_id: id,
+        quantity_available: Number(s?.quantity_available ?? 0),
+        location: s?.location ? String(s.location) : undefined,
+        part_name: s?.part_name ? String(s.part_name) : undefined,
+        min_stock_level: Number(d?.min_stock_level ?? 50),
+      };
+    });
   }
 
   const { query, where, getDocs: gd, collection: col } = await import(
@@ -134,9 +150,33 @@ export async function hydrateStock(
 }
 
 export async function loadAllEmbeddings(
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<IndexedMaterial[]> {
-  if (mode === 'memory') return [...memIndex.values()];
+  if (mode === 'memory') {
+    if (memIndex.size === 0) {
+      const { getCatalogRows } = await import('@/lib/catalog');
+      const { embedText, materialEmbedText } = await import('@/lib/hugo/retrieval/embed');
+      for (const row of getCatalogRows('materials')) {
+        const part_id = String(row.part_id || row.id);
+        memIndex.set(part_id, {
+          id: String(row.id),
+          part_id,
+          part_name: String(row.part_name || part_id),
+          part_type: row.part_type ? String(row.part_type) : undefined,
+          used_in_models: Array.isArray(row.used_in_models) ? row.used_in_models as string[] : undefined,
+          comment: row.comment ? String(row.comment) : undefined,
+          embedding: embedText(materialEmbedText({
+            part_id,
+            part_name: String(row.part_name || part_id),
+            part_type: row.part_type ? String(row.part_type) : undefined,
+            comment: row.comment ? String(row.comment) : undefined,
+          })),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+    return [...memIndex.values()];
+  }
   const snap = await getDocs(collection(db, 'material_embeddings'));
   return snap.docs.map((d) => d.data() as IndexedMaterial);
 }
@@ -144,7 +184,7 @@ export async function loadAllEmbeddings(
 export async function searchMaterialsByEmbedding(
   queryText: string,
   topK = 8,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<Array<IndexedMaterial & { score: number }>> {
   const q = embedText(queryText);
   const all = await loadAllEmbeddings(mode);
@@ -161,7 +201,7 @@ export async function upsertDocChunk(
     text: string;
     index: number;
   },
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<void> {
   const embedding = embedText(input.text);
   if (mode === 'memory') {
@@ -179,7 +219,7 @@ export async function searchDocChunks(
   sessionId: string,
   queryText: string,
   topK = 4,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<Array<{ id: string; text: string; score: number; index: number }>> {
   const q = embedText(queryText);
   if (mode === 'memory') {
@@ -219,7 +259,7 @@ export async function searchDocChunks(
     .slice(0, topK);
 }
 
-export async function clearMaterialEmbeddings(mode: Mode = 'firestore'): Promise<void> {
+export async function clearMaterialEmbeddings(mode: Mode = getServerStoreMode()): Promise<void> {
   if (mode === 'memory') {
     memIndex.clear();
     return;
@@ -239,7 +279,7 @@ export async function reindexMaterials(
   }>,
   opts?: { dryRun?: boolean; mode?: Mode }
 ): Promise<{ indexed: number; dryRun: boolean }> {
-  const mode = opts?.mode || 'firestore';
+  const mode = opts?.mode || getServerStoreMode();
   const dryRun = Boolean(opts?.dryRun);
   if (dryRun) {
     return { indexed: materials.length, dryRun: true };

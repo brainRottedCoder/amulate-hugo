@@ -15,6 +15,7 @@ import { PROMPT_VERSION } from '@/lib/hugo/prompts';
 import type { AuthUser } from '@/types/auth';
 import type { ToolResult } from '@/types/hugo';
 import { invalidateCachesForMutation } from '@/lib/cache/invalidate';
+import { getServerStoreMode } from '@/lib/storeMode';
 import { enqueueJob } from '@/lib/jobs/runner';
 import '@/lib/jobs/handlers';
 
@@ -25,7 +26,7 @@ export async function decidePendingTool(input: {
   requestId: string;
   storeMode?: 'firestore' | 'memory';
 }): Promise<{ result?: ToolResult; message: string }> {
-  const mode = input.storeMode || 'firestore';
+  const mode = input.storeMode || getServerStoreMode();
   const pending = await getPendingToolCall(input.pendingId, mode);
   if (!pending) {
     throw Object.assign(new Error('Pending tool call not found'), { status: 404 });

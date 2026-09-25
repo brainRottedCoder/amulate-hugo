@@ -74,7 +74,10 @@ export function useHugoSession() {
           if (!cancelled) setSessionId(created.id);
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Session error');
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Session error');
+          setSessionId((prev) => prev || 'local-demo');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

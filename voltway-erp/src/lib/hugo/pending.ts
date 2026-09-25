@@ -3,6 +3,7 @@ import { db } from '@/lib/firebase';
 import type { PendingToolCall, ToolName } from '@/types/hugo';
 import { PENDING_TTL_MS } from '@/types/hugo';
 import type { UserRole } from '@/types/auth';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 const memoryPending = new Map<string, PendingToolCall>();
 
@@ -23,7 +24,7 @@ export async function createPendingToolCall(
     description: string;
     requestId?: string;
   },
-  mode: 'firestore' | 'memory' = 'firestore'
+  mode: 'firestore' | 'memory' = getServerStoreMode()
 ): Promise<PendingToolCall> {
   const now = Date.now();
   const pending: Omit<PendingToolCall, 'id'> = {
@@ -51,7 +52,7 @@ export async function createPendingToolCall(
 
 export async function getPendingToolCall(
   id: string,
-  mode: 'firestore' | 'memory' = 'firestore'
+  mode: 'firestore' | 'memory' = getServerStoreMode()
 ): Promise<PendingToolCall | null> {
   if (mode === 'memory') return memoryPending.get(id) || null;
   const snap = await getDoc(doc(db, 'pending_tool_calls', id));
@@ -62,7 +63,7 @@ export async function getPendingToolCall(
 export async function setPendingStatus(
   id: string,
   status: PendingToolCall['status'],
-  mode: 'firestore' | 'memory' = 'firestore'
+  mode: 'firestore' | 'memory' = getServerStoreMode()
 ): Promise<void> {
   if (mode === 'memory') {
     const p = memoryPending.get(id);

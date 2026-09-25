@@ -37,3 +37,11 @@ test('logged out cannot use Hugo page', async ({ page }) => {
   await page.goto('/hugo');
   await expect(page).toHaveURL(/\/login/);
 });
+
+test('continue as demo reaches the dashboard', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByTestId('continue-demo').click();
+  await expect(
+    page.getByText('Executive Operations Dashboard').or(page.getByText('Daily Build Rate'))
+  ).toBeVisible({ timeout: 15000 });
+});

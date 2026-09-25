@@ -12,8 +12,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ChatMessageDoc, ChatSession } from '@/lib/hugo/memory/policy';
+import { getServerStoreMode, type StoreMode } from '@/lib/storeMode';
 
-type Mode = 'firestore' | 'memory';
+type Mode = StoreMode;
 
 const memSessions = new Map<string, ChatSession>();
 const memMessages = new Map<string, ChatMessageDoc[]>();
@@ -34,7 +35,7 @@ export function getMemoryMessagesStore(sessionId: string): ChatMessageDoc[] {
 export async function createSession(
   userId: string,
   title = 'New chat',
-  mode: Mode = 'firestore',
+  mode: Mode = getServerStoreMode(),
   tenantId = 'default'
 ): Promise<ChatSession> {
   const now = new Date().toISOString();
@@ -61,7 +62,7 @@ export async function createSession(
 
 export async function listSessions(
   userId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<ChatSession[]> {
   if (mode === 'memory') {
     return [...memSessions.values()]
@@ -82,7 +83,7 @@ export async function listSessions(
 
 export async function getSession(
   sessionId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<ChatSession | null> {
   if (mode === 'memory') return memSessions.get(sessionId) || null;
   const snap = await getDoc(doc(db, 'chat_sessions', sessionId));
@@ -93,7 +94,7 @@ export async function getSession(
 export async function assertSessionOwner(
   sessionId: string,
   userId: string,
-  mode: Mode = 'firestore',
+  mode: Mode = getServerStoreMode(),
   opts?: { tenantId?: string; isAdmin?: boolean }
 ): Promise<ChatSession> {
   const session = await getSession(sessionId, mode);
@@ -127,7 +128,7 @@ export async function addMessage(
     content: string;
     toolTrace?: Record<string, unknown> | null;
   },
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<ChatMessageDoc> {
   const ts = new Date().toISOString();
   const payload = {
@@ -158,7 +159,7 @@ export async function addMessage(
 
 export async function listMessages(
   sessionId: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<ChatMessageDoc[]> {
   if (mode === 'memory') {
     return [...(memMessages.get(sessionId) || [])].sort((a, b) =>
@@ -180,7 +181,7 @@ export async function listMessages(
 export async function touchSessionTitle(
   sessionId: string,
   title: string,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<void> {
   const updatedAt = new Date().toISOString();
   if (mode === 'memory') {

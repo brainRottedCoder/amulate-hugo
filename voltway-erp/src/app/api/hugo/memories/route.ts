@@ -4,6 +4,7 @@ import {
   deleteLongTermMemory,
   listLongTermMemories,
 } from '@/lib/hugo/memory/longTerm';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireHugoAuth(request, {
@@ -35,7 +36,7 @@ export async function DELETE(request: NextRequest) {
     if (!memoryId) {
       return NextResponse.json({ error: 'memoryId required', requestId }, { status: 400 });
     }
-    await deleteLongTermMemory(memoryId, user.uid, 'firestore', user.role === 'admin');
+    await deleteLongTermMemory(memoryId, user.uid, getServerStoreMode(), user.role === 'admin');
     return NextResponse.json({ success: true, requestId });
   } catch (error) {
     const status =

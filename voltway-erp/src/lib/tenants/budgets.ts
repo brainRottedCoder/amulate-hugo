@@ -4,6 +4,7 @@
 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getServerStoreMode } from '@/lib/storeMode';
 import { PolicyError } from '@/lib/auth/rbac';
 import { logger } from '@/lib/observability/logger';
 
@@ -32,7 +33,7 @@ function currentPeriod(): string {
 
 export async function getOrCreateBudget(
   tenantId: string,
-  mode: Mode = 'firestore',
+  mode: Mode = getServerStoreMode(),
   defaultLimit = Number(process.env.TENANT_MONTHLY_TOKEN_LIMIT || 2_000_000)
 ): Promise<TenantBudget> {
   const period = currentPeriod();
@@ -85,7 +86,7 @@ export async function assertWithinBudget(input: {
   role: string;
   mode?: Mode;
 }): Promise<TenantBudget> {
-  const mode = input.mode || 'firestore';
+  const mode = input.mode || getServerStoreMode();
   const b = await getOrCreateBudget(input.tenantId, mode);
   const status = budgetStatus(b);
   if (status.warn && !status.blocked) {
@@ -109,7 +110,7 @@ export async function recordTokenUsage(input: {
   tokens: number;
   mode?: Mode;
 }): Promise<TenantBudget> {
-  const mode = input.mode || 'firestore';
+  const mode = input.mode || getServerStoreMode();
   const b = await getOrCreateBudget(input.tenantId, mode);
   const updated: TenantBudget = {
     ...b,
@@ -127,7 +128,7 @@ export async function recordTokenUsage(input: {
 export async function setTenantBudgetLimit(
   tenantId: string,
   monthlyTokenLimit: number,
-  mode: Mode = 'firestore'
+  mode: Mode = getServerStoreMode()
 ): Promise<TenantBudget> {
   const b = await getOrCreateBudget(tenantId, mode);
   const updated = {

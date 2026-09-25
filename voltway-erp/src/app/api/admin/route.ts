@@ -14,6 +14,7 @@ import {
 import { getMemoryJobs } from '@/lib/jobs/runner';
 import { getMemoryAudits } from '@/lib/hugo/audit';
 import type { FeatureFlags } from '@/lib/config';
+import { getServerStoreMode } from '@/lib/storeMode';
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -21,10 +22,7 @@ export async function GET(request: NextRequest) {
   const { user, requestId } = auth;
 
   try {
-    const mode =
-      process.env.BUDGET_STORE === 'memory' || process.env.VITEST
-        ? 'memory'
-        : 'firestore';
+    const mode = getServerStoreMode();
     const budget = await getOrCreateBudget(user.tenantId, mode);
     const status = budgetStatus(budget);
 
@@ -55,10 +53,7 @@ export async function PATCH(request: NextRequest) {
       setFlagOverrides(body.flags as Partial<FeatureFlags>);
     }
     if (typeof body.monthlyTokenLimit === 'number') {
-      const mode =
-        process.env.BUDGET_STORE === 'memory' || process.env.VITEST
-          ? 'memory'
-          : 'firestore';
+      const mode = getServerStoreMode();
       const tenantId =
         typeof body.tenantId === 'string' ? body.tenantId : user.tenantId;
       await setTenantBudgetLimit(tenantId, body.monthlyTokenLimit, mode);

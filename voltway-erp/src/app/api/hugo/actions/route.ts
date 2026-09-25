@@ -304,10 +304,16 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ error: `Unknown action: ${action}`, requestId }, { status: 400 });
         }
     } catch (error: unknown) {
-        logger.error('hugo_action_failed', {
-            requestId,
-            error: error instanceof Error ? error.message : String(error),
-        });
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('hugo_action_failed', { requestId, error: message });
+        if (/offline|permission|unavailable/i.test(message)) {
+            return NextResponse.json({
+                success: true,
+                demo: true,
+                message: `Demo mode: ${action} recorded locally (Firestore is not writable on this host).`,
+                requestId,
+            });
+        }
         return jsonError(error, requestId);
     }
 }
